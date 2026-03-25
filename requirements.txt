@@ -1,12 +1,12 @@
 pymupdf==1.27.1
 tqdm==4.67.3
 dotenv==0.9.9
-psycopg2==2.9.11
+psycopg2-binary==2.9.11
 pydantic==2.12.5
 pydantic_core==2.41.5
 python-dotenv==1.2.1
 fastapi==0.134.0
 uvicorn==0.42.0
 email-validator==2.3.0
-argostranslate==1.10.0
+deep-translator==1.11.4
 langdetect==1.0.9

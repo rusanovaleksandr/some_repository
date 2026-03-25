@@ -51,6 +51,10 @@ const MainPage = () => {
     navigate(`/graph?folder=${encodeURIComponent(programFolder)}`);
   };
 
+  const handleAddProgram = () => {
+    navigate('/work_program');
+  };
+
   return (
     <>
       <Navbar/>
@@ -66,6 +70,17 @@ const MainPage = () => {
           disabled={loading}
         >
           {loading ? 'Загрузка...' : 'Выберите рабочую программу'}
+        </Button>
+        <Button
+          className="custom-button-margin"
+          type="button"
+          color="#000000"
+          onClick={handleAddProgram}
+          width="260px"
+          height="43px"
+          absolute={false}
+        >
+          Добавить программу
         </Button>
       </main>
 
