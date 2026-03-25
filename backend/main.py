@@ -7,19 +7,18 @@ app = FastAPI()
 
 origins = [
     "http://localhost",
-    "http://localhost:3000",     # добавьте эту строку для фронтенда
-    "http://localhost:8080",     # порт вашего сервера
-    # Если используете React/Vue с другими портами, добавьте их
+    "http://localhost:3000",
+    "http://localhost:8080",
     "http://localhost:3001",
-    "http://localhost:5173",     # для Vite
+    "http://localhost:5173",
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  # список разрешенных источников
+    allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],  # разрешить все HTTP методы (GET, POST, PUT, DELETE и т.д.)
-    allow_headers=["*"],  # разрешить все заголовки
+    allow_methods=["*"], 
+    allow_headers=["*"],
 )
 
 app.include_router(router)
