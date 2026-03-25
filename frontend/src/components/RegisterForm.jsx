@@ -29,7 +29,7 @@ function RegisterForm() {
         localStorage.setItem('userId', String(result.id));
       }
       localStorage.setItem('userLogin', email);
-      navigate('/graph');
+      navigate('/main');
     } else {
       setError(result.error);
     }
