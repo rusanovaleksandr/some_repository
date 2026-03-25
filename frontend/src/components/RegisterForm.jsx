@@ -25,6 +25,10 @@ function RegisterForm() {
     const result = await register(email, password);
     
     if (result.success) {
+      if (result.id) {
+        localStorage.setItem('userId', String(result.id));
+      }
+      localStorage.setItem('userLogin', email);
       navigate('/graph');
     } else {
       setError(result.error);

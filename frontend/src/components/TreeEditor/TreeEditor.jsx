@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import TreeNode from './TreeNode';
 import EmptyState from './EmptyState';
 import TreeActions from './TreeActions';
@@ -7,6 +8,7 @@ import { generateId, convertToBackendFormat, submitProgram } from './utils';
 import './TreeEditor.css';
 
 const TreeEditor = () => {
+  const navigate = useNavigate();
 
   const [programName, setProgramName] = useState(''); // название всей программы
 
@@ -53,6 +55,16 @@ const TreeEditor = () => {
   // Показать/скрыть JSON представление
   const handleToggleJson = () => {
     setShowJson(!showJson);
+  };
+
+  const handleSubmitProgram = async () => {
+    const result = await submitProgram(programName, disciplines);
+    if (result.success) {
+      alert('Рабочая программа успешно добавлена');
+      navigate('/main');
+      return;
+    }
+    alert(result.error || 'Ошибка отправки программы');
   };
 
   return (
@@ -122,7 +134,7 @@ const TreeEditor = () => {
       <div className="submit-block">
         <button
           className="submit-btn"
-          onClick={submitProgram}
+          onClick={handleSubmitProgram}
         >
           Отправить программу
         </button>

@@ -15,11 +15,11 @@ const ProgramsModal = ({ isOpen, onClose, programs, onShowGraph }) => {
           <ul>
             {programs.map((program, idx) => (
               <li key={idx}>
-                <span className="text-program">{program}</span>
+                <span className="text-program">{program.displayName || program}</span>
                 <Button
                 type="button"
                 color="#000000"
-                onClick={() => onShowGraph(program)}
+                onClick={() => onShowGraph(program.path || program)}
                 width="160px"
                 height="43px"
                 absolute={false}

@@ -1,16 +1,85 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Body, Depends, status
 from fastapi.responses import JSONResponse
 from src.dataBase.dependencies import get_db
-from src.dataBase.dataBaseStructs import User, WorkProgram
+from src.dataBase.dataBaseStructs import Topic, User, WorkProgram
 from src.dataBase.dataBaseController import DataBaseController
 from src.api.translator import translate_work_program_values
-from typing import Dict, Any
 import os
 from pathlib import Path
 import json
 import tempfile
+from typing import Any
 
 router = APIRouter()
+
+
+def _parse_front_work_program_payload(payload: dict[str, Any]) -> list[WorkProgram]:
+    """Преобразует payload фронтенда в список WorkProgram."""
+    if "idUser" not in payload:
+        raise ValueError("Field 'idUser' is required")
+
+    id_user = payload.get("idUser")
+    if not isinstance(id_user, int):
+        raise ValueError("Field 'idUser' must be integer")
+
+    name_university = payload.get("nameUniversity", "frontend")
+    if not isinstance(name_university, str) or not name_university.strip():
+        name_university = "frontend"
+
+    name_direction_override = payload.get("nameDirection")
+
+    meta_keys = {"idUser", "nameUniversity", "nameDirection"}
+    program_entries = [(k, v) for k, v in payload.items() if k not in meta_keys]
+    if len(program_entries) != 1:
+        raise ValueError("Payload must contain exactly one program root key")
+
+    root_program_name, disciplines = program_entries[0]
+    if not isinstance(disciplines, list):
+        raise ValueError("Program value must be a list of disciplines")
+
+    name_direction = name_direction_override or root_program_name
+    result: list[WorkProgram] = []
+
+    for discipline_item in disciplines:
+        if not isinstance(discipline_item, dict) or len(discipline_item) != 1:
+            raise ValueError("Each discipline item must be an object with one key")
+
+        discipline_name, discipline_data = next(iter(discipline_item.items()))
+        if not isinstance(discipline_data, dict):
+            raise ValueError("Discipline data must be an object")
+
+        previous_disciplines = discipline_data.get("previousDisciplines", [])
+        if not isinstance(previous_disciplines, list):
+            raise ValueError("previousDisciplines must be a list")
+
+        topics_payload = discipline_data.get("topics", [])
+        if not isinstance(topics_payload, list):
+            raise ValueError("topics must be a list")
+
+        topics: dict[str, Topic] = {}
+        for topic_item in topics_payload:
+            if not isinstance(topic_item, dict):
+                continue
+            for topic_name, educational_units in topic_item.items():
+                if not isinstance(educational_units, list):
+                    continue
+                topics[str(topic_name)] = Topic(educationalUnits=[str(unit) for unit in educational_units])
+
+        result.append(
+            WorkProgram(
+                idUser=id_user,
+                nameUniversity=str(name_university),
+                nameDirection=str(name_direction),
+                nameWorkProgram=str(discipline_name),
+                previousDisciplines=[str(item) for item in previous_disciplines],
+                topics=topics,
+            )
+        )
+
+    if not result:
+        raise ValueError("No work programs in payload")
+
+    return result
 
 def uploadFileWorkProgram(pathWorkProgram: Path, workProgram: WorkProgram) -> tuple[bool, bool]:
     """Метод загрузки файла учебной и создания папок с университетом и направлением"""
@@ -19,13 +88,19 @@ def uploadFileWorkProgram(pathWorkProgram: Path, workProgram: WorkProgram) -> tu
     if pathWorkProgram.parent.exists():
         isExistDirectionPath = True
     pathWorkProgram.parent.mkdir(parents=True, exist_ok=True)
-    topicsDirection = {}
-    for topic in workProgram.topics:
-        topicsDirection[topic] = workProgram.topics[topic].educationalUnits
+    topicsDictionary = {}
+    for topic_name, topic_data in workProgram.topics.items():
+        topicsDictionary[topic_name] = {
+            "subtopics": topic_data.educationalUnits
+        }
+
     programWorkDictionary = {
-        "name": workProgram.nameWorkProgram,
-        "previousDisciplines": workProgram.previousDisciplines,
-        "topics": topicsDirection
+        workProgram.nameDirection: {
+            workProgram.nameWorkProgram: {
+                "previousDisciplines": workProgram.previousDisciplines,
+                "topics": topicsDictionary
+            }
+        }
     }
     if pathWorkProgram.exists():
         isExistWorkProgramPath = True
@@ -38,6 +113,22 @@ def uploadFileWorkProgram(pathWorkProgram: Path, workProgram: WorkProgram) -> tu
     os.replace(temp_path, pathWorkProgram)
 
     return isExistDirectionPath, isExistWorkProgramPath
+
+
+def uploadJsonFile(pathToFile: Path, content: dict[str, Any]) -> tuple[bool, bool]:
+    """Атомарно сохраняет произвольный JSON в файл."""
+    isExistDirectoryPath = pathToFile.parent.exists()
+    isExistFilePath = pathToFile.exists()
+
+    pathToFile.parent.mkdir(parents=True, exist_ok=True)
+
+    with tempfile.NamedTemporaryFile('w', encoding='utf-8', delete=False, dir=str(pathToFile.parent), suffix='.tmp') as temp_file:
+        json.dump(content, temp_file, indent=4, ensure_ascii=False)
+        temp_path = Path(temp_file.name)
+
+    os.replace(temp_path, pathToFile)
+
+    return isExistDirectoryPath, isExistFilePath
 
 @router.post("/login")
 def login(user: User, db: DataBaseController = Depends(get_db)):
@@ -60,7 +151,7 @@ def login(user: User, db: DataBaseController = Depends(get_db)):
             content={"responseMessage": "ok", "id": result["id"]}
     )
 
-@router.post("/sign-up")
+@router.post("/registration")
 def registration(user: User, db: DataBaseController = Depends(get_db)):
     """Метод обработки регистрации пользователя.
     Возвращает код и ответ в формате:
@@ -94,82 +185,199 @@ def registration(user: User, db: DataBaseController = Depends(get_db)):
     )
 
 @router.post("/add-program")
-def addProgram(workProgram: Dict[str, Any], db: DataBaseController = Depends(get_db)):
+def addProgram(payload: Any = Body(...), db: DataBaseController = Depends(get_db)):
     """Метод добавления учебной программы.
     Возвращает код и ответ в формате.
     {responseMessage: {сообщение от сервера}}"""
+    if not db.isConnected():
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"responseMessage": "DataBase connect error!"}
+        )
+    is_front_payload = isinstance(payload, dict) and "nameWorkProgram" not in payload
 
-    workProgramName = ""
-    for key, value in workProgram.items():
-        workProgramName = key
-        break
+    try:
+        if is_front_payload:
+            if "idUser" not in payload or not isinstance(payload["idUser"], int):
+                raise ValueError("Field 'idUser' is required and must be integer")
+            id_user = payload["idUser"]
+        else:
+            work_programs = [WorkProgram.model_validate(payload)]
+            id_user = work_programs[0].idUser
+    except Exception as error:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content={"responseMessage": "Invalid add-program payload", "error": str(error)}
+        )
 
-    pathStorage = Path(os.getenv('LOCAL_PATH_TO_STORAGE', './storage'))
-    pathWorkProgram = pathStorage / f"{workProgramName}.json"
+    user = db.findUserById(id_user)
+    if len(user) == 0:
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"responseMessage": "Not find current user!"}
+        )
 
-    pathWorkProgram.parent.mkdir(parents=True, exist_ok=True)
+    pathStorage = Path(os.getenv('LOCAL_PATH_TO_STORAGE'))
+    translation_warnings: list[str] = []
 
-    with open(pathWorkProgram, 'w', encoding='utf-8') as f:
-        json.dump(workProgram, f, ensure_ascii=False, indent=2)
+    if is_front_payload:
+        name_university = payload.get("nameUniversity", "frontend")
+        if not isinstance(name_university, str) or not name_university.strip():
+            name_university = "frontend"
+
+        name_direction_override = payload.get("nameDirection")
+        if name_direction_override is not None and (not isinstance(name_direction_override, str) or not name_direction_override.strip()):
+            return JSONResponse(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                content={"responseMessage": "Invalid add-program payload", "error": "Field 'nameDirection' must be non-empty string"}
+            )
+
+        meta_keys = {"idUser", "nameUniversity", "nameDirection"}
+        program_entries = [(k, v) for k, v in payload.items() if k not in meta_keys]
+        if len(program_entries) != 1:
+            return JSONResponse(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                content={"responseMessage": "Invalid add-program payload", "error": "Payload must contain exactly one program root key"}
+            )
+
+        root_program_name, disciplines = program_entries[0]
+        if not isinstance(root_program_name, str) or not root_program_name.strip() or not isinstance(disciplines, list):
+            return JSONResponse(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                content={"responseMessage": "Invalid add-program payload", "error": "Program root key must be string and value must be list"}
+            )
+
+        name_direction = name_direction_override or root_program_name
+        final_program_json: dict[str, Any] = {root_program_name: {}}
+        translated_fields_count = 0
+
+        for discipline_item in disciplines:
+            if not isinstance(discipline_item, dict) or len(discipline_item) != 1:
+                continue
+
+            discipline_name, discipline_data = next(iter(discipline_item.items()))
+            if not isinstance(discipline_data, dict):
+                continue
+
+            previous_disciplines = discipline_data.get("previousDisciplines", [])
+            topics_payload = discipline_data.get("topics", [])
+            if not isinstance(previous_disciplines, list):
+                previous_disciplines = []
+            if not isinstance(topics_payload, list):
+                topics_payload = []
+
+            topics_for_translate: dict[str, Topic] = {}
+            for topic_item in topics_payload:
+                if not isinstance(topic_item, dict):
+                    continue
+                for topic_name, subtopics in topic_item.items():
+                    if isinstance(subtopics, list):
+                        topics_for_translate[str(topic_name)] = Topic(educationalUnits=[str(unit) for unit in subtopics])
+
+            work_program_for_translate = WorkProgram(
+                idUser=id_user,
+                nameUniversity=str(name_university),
+                nameDirection=str(name_direction),
+                nameWorkProgram=str(discipline_name),
+                previousDisciplines=[str(item) for item in previous_disciplines],
+                topics=topics_for_translate,
+            )
+
+            try:
+                translated_program, translation_stats = translate_work_program_values(work_program_for_translate)
+                translated_fields_count += translation_stats.translated_fields_count
+            except Exception as error:
+                translated_program = work_program_for_translate
+                translation_warnings.append(str(error))
+
+            final_program_json[root_program_name][translated_program.nameWorkProgram] = {
+                "previousDisciplines": translated_program.previousDisciplines,
+                "topics": {
+                    topic_name: {"subtopics": topic_data.educationalUnits}
+                    for topic_name, topic_data in translated_program.topics.items()
+                }
+            }
+
+        pathWorkProgram = Path(name_university) / name_direction / f"{root_program_name}_{id_user}.json"
+        isExistDirectionPath, isExistWorkProgramPath = uploadJsonFile(pathStorage / pathWorkProgram, final_program_json)
+
+        if not isExistDirectionPath:
+            addResult = db.addUserFolder(id_user, str(pathWorkProgram.parent))
+            if not addResult:
+                return JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={"responseMessage": "DataBase add user folder error!"}
+                )
+
+        addResult = db.upsertWorkProgram(id_user, str(pathWorkProgram.parent), str(pathWorkProgram))
+        if not addResult:
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"responseMessage": "DataBase add/update user file error!"}
+            )
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "responseMessage": "ok",
+                "savedCount": 1,
+                "isOverwritten": isExistWorkProgramPath,
+                "savedFilePath": str(pathWorkProgram),
+                "savedFilePaths": [str(pathWorkProgram)],
+                "translatedFieldsCount": translated_fields_count,
+                "translationSkipped": len(translation_warnings) > 0,
+                "translationWarnings": translation_warnings
+            }
+        )
+
+    saved_paths: list[str] = []
+    overwritten_count = 0
+    translated_fields_count = 0
+
+    for workProgram in work_programs:
+        try:
+            translated_program, translation_stats = translate_work_program_values(workProgram)
+            translated_fields_count += translation_stats.translated_fields_count
+        except Exception as error:
+            translated_program = workProgram
+            translation_warnings.append(str(error))
+
+        pathWorkProgram = (Path(workProgram.nameUniversity) / workProgram.nameDirection /
+                           f"{workProgram.nameWorkProgram}_{workProgram.idUser}.json")
+        isExistDirectionPath, isExistWorkProgramPath = uploadFileWorkProgram(pathStorage / pathWorkProgram, translated_program)
+        if isExistWorkProgramPath:
+            overwritten_count += 1
+
+        if not isExistDirectionPath:
+            addResult = db.addUserFolder(translated_program.idUser, str(pathWorkProgram.parent))
+            if not addResult:
+                return JSONResponse(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    content={"responseMessage": "DataBase add user folder error!"}
+                )
+
+        addResult = db.upsertWorkProgram(translated_program.idUser, str(pathWorkProgram.parent), str(pathWorkProgram))
+        if not addResult:
+            return JSONResponse(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"responseMessage": "DataBase add/update user file error!"}
+            )
+
+        saved_paths.append(str(pathWorkProgram))
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
             "responseMessage": "ok",
+            "savedCount": len(saved_paths),
+            "isOverwritten": overwritten_count > 0,
+            "savedFilePath": saved_paths[0] if saved_paths else "",
+            "savedFilePaths": saved_paths,
+            "translatedFieldsCount": translated_fields_count,
+            "translationSkipped": len(translation_warnings) > 0,
+            "translationWarnings": translation_warnings
         }
     )
-
-    # if not db.isConnected():
-    #     return JSONResponse(
-    #         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-    #         content={"responseMessage": "DataBase connect error!"}
-    #     )
-    # user = db.findUserById(workProgram.idUser)
-    # if len(user) == 0:
-    #     return JSONResponse(
-    #         status_code=status.HTTP_401_UNAUTHORIZED,
-    #         content={"responseMessage": "Not find current user!"}
-    #     )
-    #
-    # try:
-    #     translated_program, translation_stats = translate_work_program_values(workProgram)
-    # except Exception as error:
-    #     return JSONResponse(
-    #         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-    #         content={
-    #             "responseMessage": "Translation service unavailable",
-    #             "error": str(error)
-    #         }
-    #     )
-    #
-    # pathStorage = Path(os.getenv('LOCAL_PATH_TO_STORAGE'))
-    # pathWorkProgram = (Path(workProgram.nameUniversity) / workProgram.nameDirection /
-    #                    f"{workProgram.nameWorkProgram}_{workProgram.idUser}.json")
-    # isExistDirectionPath, isExistWorkProgramPath = uploadFileWorkProgram(pathStorage / pathWorkProgram, translated_program)
-    # if not isExistDirectionPath:
-    #     addResult = db.addUserFolder(translated_program.idUser, str(pathWorkProgram.parent))
-    #     if not addResult:
-    #         return JSONResponse(
-    #             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-    #             content={"responseMessage": "DataBase add user folder error!"}
-    #         )
-    #
-    # addResult = db.upsertWorkProgram(translated_program.idUser, str(pathWorkProgram.parent), str(pathWorkProgram))
-    # if not addResult:
-    #     return JSONResponse(
-    #         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-    #         content={"responseMessage": "DataBase add/update user file error!"}
-    #     )
-    #
-    # return JSONResponse(
-    #     status_code=status.HTTP_200_OK,
-    #     content={
-    #         "responseMessage": "ok",
-    #         "isOverwritten": isExistWorkProgramPath,
-    #         "savedFilePath": str(pathWorkProgram),
-    #         "translatedFieldsCount": translation_stats.translated_fields_count
-    #     }
-    # )
 
 @router.get("/get-programs")
 def getPrograms(userId : int, db: DataBaseController = Depends(get_db)):
@@ -196,7 +404,7 @@ def getCertainProgram(userId: int, pathToProgramFolder: str, db: DataBaseControl
         )
 
     pathStorage = Path(os.getenv('LOCAL_PATH_TO_STORAGE'))
-    workProgramPath = pathStorage / de.getWorkProgramPath(userId, pathToProgramFolder)
+    workProgramPath = pathStorage / db.getWorkProgramPath(userId, pathToProgramFolder)
 
     if not workProgramPath.is_file():
         return JSONResponse(
@@ -205,7 +413,7 @@ def getCertainProgram(userId: int, pathToProgramFolder: str, db: DataBaseControl
         )
     
     try:
-        with open(pathWorkProgram, 'r', encoding="utf-8") as fileWorkProgramJson:
+        with open(workProgramPath, 'r', encoding="utf-8") as fileWorkProgramJson:
             programData = json.load(fileWorkProgramJson)
         
         return JSONResponse(

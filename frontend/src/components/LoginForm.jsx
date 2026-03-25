@@ -26,7 +26,11 @@ function LoginForm() {
     const result = await login(email, password);
     
     if (result.success) {
-      navigate('/graph');
+      if (result.id) {
+        localStorage.setItem('userId', String(result.id));
+      }
+      localStorage.setItem('userLogin', email);
+      navigate('/main');
     } else {
       setError(result.error);
     }

@@ -1,18 +1,21 @@
 
-const domen = process.env.REACT_APP_API_URL;
+const domain = process.env.REACT_APP_API_URL || 'localhost:8000';
+const API_BASE_URL = domain.startsWith('http') ? domain : `http://${domain}`;
 
-export const login = async (email, password) => {
+export const login = async (login, password) => {
   try {
-    const response = await fetch(`http://${domen}/login`, {
+    const response = await fetch(`${API_BASE_URL}/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ email, password })
+      body: JSON.stringify({ login, password })
     });
 
+    const body = await response.json().catch(() => ({}));
+
     if (response.status === 200) {
-      return { success: true };
+      return { success: true, id: body.id };
     }
     
     if (response.status === 401) {
@@ -34,18 +37,20 @@ export const login = async (email, password) => {
   }
 };
 
-export const register = async (email, password) => {
+export const register = async (login, password) => {
   try {
-    const response = await fetch(`http://${domen}/sign-up`, {
+    const response = await fetch(`${API_BASE_URL}/registration`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ email, password })
+      body: JSON.stringify({ login, password })
     });
 
+    const body = await response.json().catch(() => ({}));
+
     if (response.status === 201) {
-      return { success: true };
+      return { success: true, id: body.id };
     }
     
     if (response.status === 401) {

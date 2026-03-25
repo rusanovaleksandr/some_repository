@@ -51,9 +51,14 @@ const GraphField = forwardRef(({ data, onNodeSelect }, ref) => {
       successors.forEach(s => nodesSet.add(s));
     });
 
-    // узлы
+    // узлы дисциплин
     const nodes = Array.from(nodesSet).map(name => ({
-      data: { id: name, label: name, isMain: allSubjects.includes(name) ? 'true' : 'false' }
+      data: {
+        id: name,
+        label: name,
+        isMain: allSubjects.includes(name) ? 'true' : 'false',
+        nodeType: 'discipline'
+      }
     }));
 
     // ребра 
@@ -85,6 +90,50 @@ const GraphField = forwardRef(({ data, onNodeSelect }, ref) => {
           });
           edgesSet.add(edgeKey);
         }
+      });
+
+      // узлы тем и подтем
+      const topics = Array.isArray(subjectData.темы) ? subjectData.темы : [];
+      topics.forEach((topic) => {
+        const topicName = topic?.name;
+        if (!topicName) return;
+
+        const topicId = `topic::${subject}::${topicName}`;
+        nodes.push({
+          data: {
+            id: topicId,
+            label: topicName,
+            isMain: 'false',
+            nodeType: 'topic'
+          }
+        });
+
+        const subjectToTopicEdge = `${subject}->${topicId}`;
+        if (!edgesSet.has(subjectToTopicEdge)) {
+          edges.push({ data: { source: subject, target: topicId } });
+          edgesSet.add(subjectToTopicEdge);
+        }
+
+        const subtopics = Array.isArray(topic.subtopics) ? topic.subtopics : [];
+        subtopics.forEach((subtopic) => {
+          if (!subtopic) return;
+
+          const subtopicId = `subtopic::${subject}::${topicName}::${subtopic}`;
+          nodes.push({
+            data: {
+              id: subtopicId,
+              label: subtopic,
+              isMain: 'false',
+              nodeType: 'subtopic'
+            }
+          });
+
+          const topicToSubtopicEdge = `${topicId}->${subtopicId}`;
+          if (!edgesSet.has(topicToSubtopicEdge)) {
+            edges.push({ data: { source: topicId, target: subtopicId } });
+            edgesSet.add(topicToSubtopicEdge);
+          }
+        });
       });
     });
 
@@ -120,6 +169,29 @@ const GraphField = forwardRef(({ data, onNodeSelect }, ref) => {
               'border-width': 3,
               'color': '#ffffff',
               'font-weight': 'bold'
+            }
+          },
+          {
+            selector: 'node[nodeType = "topic"]',
+            style: {
+              'background-color': '#E3F2FD',
+              'border-color': '#1565C0',
+              'color': '#0D47A1',
+              'shape': 'round-rectangle',
+              'width': 130,
+              'height': 44,
+            }
+          },
+          {
+            selector: 'node[nodeType = "subtopic"]',
+            style: {
+              'background-color': '#E8F5E9',
+              'border-color': '#2E7D32',
+              'color': '#1B5E20',
+              'shape': 'round-rectangle',
+              'width': 120,
+              'height': 40,
+              'font-size': '12px'
             }
           },
           {

@@ -50,20 +50,38 @@ export const convertToBackendFormat = (programName, disciplines) => {
   return result;
 };
 
-const ip = process.env.REACT_APP_API_URL_ADD_PROGRAM;
+const domain = process.env.REACT_APP_API_URL_ADD_PROGRAM || process.env.REACT_APP_API_URL || 'localhost:8000';
+const API_BASE_URL = domain.startsWith('http') ? domain : `http://${domain}`;
+
 export const submitProgram = async (programName, disciplines) => {
-  const data = convertToBackendFormat(programName, disciplines);
+  const userId = Number(localStorage.getItem('userId'));
+  const data = {
+    ...convertToBackendFormat(programName, disciplines),
+    idUser: userId,
+  };
+
+  if (!programName || !programName.trim()) {
+    return { success: false, error: 'Укажите название образовательной программы' };
+  }
+
+  if (!Number.isInteger(userId) || userId <= 0) {
+    return { success: false, error: 'Пользователь не авторизован. Войдите заново.' };
+  }
 
   try {
-    const res = await fetch(`http://${ip}/add-program`, {
+    const res = await fetch(`${API_BASE_URL}/add-program`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
 
-    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+    if (!res.ok) {
+      const errorBody = await res.json().catch(() => ({}));
+      throw new Error(errorBody.responseMessage || `HTTP error! status: ${res.status}`);
+    }
+
     return { success: true };
   } catch (e) {
-    return { success: false, error: 'Ошибка соединения' };
+    return { success: false, error: e.message || 'Ошибка соединения' };
   }
 };

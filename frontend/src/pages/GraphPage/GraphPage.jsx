@@ -1,11 +1,15 @@
 import React, { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import GraphPanel from "../../components/GraphPanel/GraphPanel";
 import { fetchGraphData } from '../../services/api/graph';
 import "./GraphPage.css"
 
 const GraphPage = () => {
+    const location = useLocation();
+    const navigate = useNavigate();
     const [graphData, setGraphData] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
 
     // чисто для теста пока, потом от сервака данные
     const testData = {
@@ -119,25 +123,57 @@ const GraphPage = () => {
 
     useEffect(() => {
         const loadGraphData = async () => {
+            const userId = Number(localStorage.getItem('userId'));
+            const params = new URLSearchParams(location.search);
+            const folder = params.get('folder');
+
+            if (!Number.isInteger(userId) || userId <= 0) {
+                setError('Пользователь не авторизован. Войдите заново.');
+                setLoading(false);
+                return;
+            }
+
+            if (!folder) {
+                setError('Программа не выбрана. Откройте список программ на главной странице.');
+                setLoading(false);
+                return;
+            }
+
             try {
-                const data = await fetchGraphData();
+                const data = await fetchGraphData(userId, folder);
                 setGraphData(data);
+                setError('');
             } catch (err) {
-                // если от сервера ничего не пришло, то тестовые данные
                 console.error('Failed to fetch graph data:', err);
-                setGraphData(testData);
+                setError('Не удалось загрузить выбранную программу с сервера.');
+                setGraphData(null);
             } finally {
                 setLoading(false);
             }
         };
 
         loadGraphData();
-    }, []);
+    }, [location.search]);
 
     if (loading) {
         return (
             <main className="graph-page__main">
                 <div className="graph-page__loading">Загрузка данных...</div>
+            </main>
+        );
+    }
+
+    if (error) {
+        return (
+            <main className="graph-page__main">
+                <div className="graph-page__loading">{error}</div>
+                <button
+                    type="button"
+                    onClick={() => navigate('/main')}
+                    style={{ marginTop: '16px' }}
+                >
+                    Перейти к списку программ
+                </button>
             </main>
         );
     }
