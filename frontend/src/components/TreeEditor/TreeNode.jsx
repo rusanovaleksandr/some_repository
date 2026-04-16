@@ -4,24 +4,22 @@ import './TreeEditor.css';
 
 const TreeNode = ({ node, onUpdate, onAddSibling, level = 0 }) => {
 
-  const [isExpanded, setIsExpanded] = useState(true); // открыт/закрыт список дочерних элементов
-  const [prevInput, setPrevInput] = useState(''); // значение поля ввода предшествующей дисциплины
+  const [isExpanded, setIsExpanded] = useState(true);
+  const [prevInput, setPrevInput] = useState('');
 
-  const inputRef = useRef(null); // ссылка на поле ввода для автофокуса
+  const inputRef = useRef(null);
 
   const childType = getChildType(node.type);
   const canAddChild = childType !== null;
 
-  // Автофокус на новом пустом элементе
   useEffect(() => {
     if (node.name === '' && inputRef.current) {
       setTimeout(() => {
         inputRef.current.focus();
       }, 0);
     }
-  }, [node.id]); // срабатывает при появлении нового узла
+  }, [node.id]);
 
-  // Обработка нажатия Enter - добавляет соседний элемент
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -31,7 +29,6 @@ const TreeNode = ({ node, onUpdate, onAddSibling, level = 0 }) => {
     }
   };
 
-  // Обновление названия элемента
   const handleNameChange = (e) => {
     onUpdate({
       ...node,
@@ -39,7 +36,6 @@ const TreeNode = ({ node, onUpdate, onAddSibling, level = 0 }) => {
     });
   };
 
-  // Добавление дочернего элемента (темы или подтемы)
   const handleAddChild = () => {
     if (!childType) return;
 
@@ -56,7 +52,6 @@ const TreeNode = ({ node, onUpdate, onAddSibling, level = 0 }) => {
     });
   };
 
-  // Добавление предшествующей дисциплины (только для дисциплин)
   const handleAddPrev = () => {
     if (!prevInput.trim()) return;
 
@@ -66,10 +61,9 @@ const TreeNode = ({ node, onUpdate, onAddSibling, level = 0 }) => {
       ...node,
       previousDisciplines: [...list, prevInput]
     });
-    setPrevInput(''); // очищаем поле после добавления
+    setPrevInput('');
   };
 
-  // Обновление конкретного дочернего элемента
   const handleChildUpdate = (childIndex, updatedChild) => {
     const copy = [...node.children];
     copy[childIndex] = updatedChild;
@@ -80,17 +74,16 @@ const TreeNode = ({ node, onUpdate, onAddSibling, level = 0 }) => {
     });
   };
 
-  // Удаление текущего узла с подтверждением
   const handleDelete = () => {
     if (window.confirm(`Удалить ${getRussianType(node.type)} "${node.name || 'без названия'}"?`)) {
-      onUpdate(null); // null сигнализирует об удалении
+      onUpdate(null); 
     }
   };
 
   return (
     <div
       className="tree-node"
-      style={{ marginLeft: level * 16 }} // отступ зависит от уровня вложенности
+      style={{ marginLeft: level * 16 }}
     >
 
       <div className="node-content">
@@ -197,7 +190,6 @@ const TreeNode = ({ node, onUpdate, onAddSibling, level = 0 }) => {
               node={child}
               level={level + 1}
 
-              // Добавление соседа после текущего элемента
               onAddSibling={(type) => {
                 const newNode = {
                   id: generateId(),
@@ -218,17 +210,14 @@ const TreeNode = ({ node, onUpdate, onAddSibling, level = 0 }) => {
                 });
               }}
 
-              // Обновление или удаление дочернего элемента
               onUpdate={(updatedChild) => {
                 if (updatedChild === null) {
-                  // Удаляем элемент
                   const filtered = node.children.filter((_, i) => i !== index);
                   onUpdate({
                     ...node,
                     children: filtered
                   });
                 } else {
-                  // Обновляем существующий
                   handleChildUpdate(index, updatedChild);
                 }
               }

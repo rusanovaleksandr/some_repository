@@ -26,3 +26,8 @@ CREATE TABLE IF NOT EXISTS uploaded_files (
         REFERENCES users(id)
         ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS ParserType (
+    universityName  VARCHAR(255) PRIMARY KEY,
+    parserType  INT NOT NULL
+);

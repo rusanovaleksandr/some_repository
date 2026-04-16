@@ -11,7 +11,6 @@ const GraphPage = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
-    // чисто для теста пока, потом от сервака данные
     const testData = {
         // 1 семестр
         "Математический анализ": {

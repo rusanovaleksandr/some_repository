@@ -27,6 +27,9 @@ class DataBaseController:
         self.__tableWorkPrograms = "uploaded_files"
         self.__tableWorkProgramsFields = ["idUser", "folder_name", "file_path"]
 
+        self.__tableParsers = "ParserType"
+        self.__tableParsersFields = ["universityName", "parserType"]
+
     def openConnection(self) -> bool:
         """Метод создания пулла соединений"""
         if not self.__dbName:
@@ -242,3 +245,41 @@ class DataBaseController:
         if len(user) >= 2:
             return {"id": user[0], "login": user[1]}
         return {}
+
+    def addParser(self, universityName: str, parserType: int) -> bool:
+        """Метода добавления нового парсера в базу данных.
+        Возвращает true, если парсер был успешно добавлен"""
+        try:
+            fields = ", ".join(self.__tableParsersFields)
+            request = f"INSERT INTO {self.__tableParsers} ({fields}) VALUES (%s, %s);"
+            args = (universityName, parserType)
+            return self.__insertOperation(request, args)
+        except Exception as e:
+            print("Error:", e)
+            return False
+
+    def findParserByType(self, parserType: int) -> str | None:
+        """Метода возвращает название университета по типу парсера."""
+        request = f"SELECT * FROM {self.__tableParsers} WHERE parserType = %s"
+        args = (parserType,)
+
+        result = self.__findOperation(request, args)
+        if not result:
+            return None
+        university = result[0]
+        if len(university) < 2:
+            return None
+        return university[0]
+
+    def findTypeParserByUniversityName(self, universityName: str) -> int | None:
+        """Метода возвращает код парсера по названию университета."""
+        request = f"SELECT * FROM {self.__tableParsers} WHERE universityName = %s"
+        args = (universityName,)
+
+        result = self.__findOperation(request, args)
+        if not result:
+            return None
+        university = result[0]
+        if len(university) < 2:
+            return None
+        return university[1]

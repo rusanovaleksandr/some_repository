@@ -30,6 +30,18 @@ docker compose down
 docker compose down -v
 ```
 
+## Dev-режим (hot-reload)
+
+
+```bash
+docker compose -f docker-compose.dev.yml up --build
+```
+Остановить dev-режим:
+
+```bash
+docker compose -f docker-compose.dev.yml down
+```
+
 ## Переменные окружения (опционально)
 
 Можно создать файл `.env` в корне проекта, чтобы переопределить значения по умолчанию:
@@ -53,6 +65,10 @@ REACT_APP_API_URL_GET_PROGRAMMS=localhost:8000
 
 ## Что добавлено для контейнеризации
 - `docker-compose.yml` — оркестрация `frontend`, `backend`, `db`
+- `docker-compose.dev.yml` — dev-режим с hot-reload для `frontend` и `backend`
 - `backend/Dockerfile` — контейнер FastAPI
 - `frontend/Dockerfile` + `frontend/nginx.conf` — production-сборка React и раздача через Nginx
 - `.dockerignore` — ускорение сборки и уменьшение контекста
+
+
+"незначительно изменение для проверки"

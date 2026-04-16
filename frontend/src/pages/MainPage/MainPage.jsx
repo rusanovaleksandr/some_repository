@@ -55,32 +55,35 @@ const MainPage = () => {
     navigate('/work_program');
   };
 
+  const handleManualAdd = () => {
+    navigate('/upload_programs');
+  };
+
   return (
     <>
       <Navbar/>
       <main className="main-page-center">
         <Button
-          className="custom-button-margin"
-          type="button"
-          color="#000000"
           onClick={fetchPrograms}
           width="260px"
           height="43px"
-          absolute={false}
           disabled={loading}
         >
           {loading ? 'Загрузка...' : 'Выберите рабочую программу'}
         </Button>
         <Button
-          className="custom-button-margin"
-          type="button"
-          color="#000000"
           onClick={handleAddProgram}
           width="260px"
           height="43px"
-          absolute={false}
         >
           Добавить программу
+        </Button>
+        <Button
+            onClick={handleManualAdd}
+            width="260px"
+            height="43px"
+        >
+          Добавить свою программу
         </Button>
       </main>
 

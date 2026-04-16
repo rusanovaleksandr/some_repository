@@ -6,6 +6,7 @@ import WorkProgramPage from './pages/WorkProgramPage/WorkProgramPage';
 import GraphPage from './pages/GraphPage/GraphPage';
 import './assets/styles/global.css';
 import MainPage from './pages/MainPage/MainPage';
+import UploadProgram from './components/UploadProgram';
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
         <Route path="/work_program" element={< WorkProgramPage/>} />
         <Route path="/graph" element={<GraphPage />} />
         <Route path="/main" element={< MainPage/>} />
+        <Route path="/upload_programs" element={< UploadProgram/>}/>
       </Routes>
     </BrowserRouter>
   );

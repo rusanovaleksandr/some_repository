@@ -1,13 +1,94 @@
-import React, { useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import React, { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import cytoscape from 'cytoscape';
 import dagre from 'cytoscape-dagre';
 import './GraphField.css';
 
 cytoscape.use(dagre);
 
-const GraphField = forwardRef(({ data, onNodeSelect }, ref) => {
+const applyGraphVisibility = (cy, selectedNodeIds, hiddenNodeIds) => {
+  if (!cy) return;
+
+  cy.batch(() => {
+    cy.nodes().removeClass('highlighted').style('display', 'element');
+    cy.edges().style('display', 'element');
+    cy.nodes().unselect();
+
+    selectedNodeIds.forEach((nodeId) => {
+      const node = cy.getElementById(nodeId);
+      if (node.nonempty()) {
+        node.addClass('highlighted');
+        node.select();
+      }
+    });
+
+    hiddenNodeIds.forEach((nodeId) => {
+      const node = cy.getElementById(nodeId);
+      if (node.nonempty()) {
+        node.style('display', 'none');
+        node.connectedEdges().style('display', 'none');
+      }
+    });
+  });
+};
+
+const GraphField = forwardRef(({ 
+  data, 
+  selectedNodeIds = [], 
+  hiddenNodeIds = [], 
+  onHideSelected, 
+  hideButtonText = 'Скрыть выбранные', 
+  keepOnlyButtonText = 'Оставить только выделенные и потомков', 
+  onKeepOnlySelectedAndDescendants, 
+  onHideSubtopicsForDisciplines, 
+  onHideTopicsAndSubtopicsForDisciplines, 
+  areAllSelectedDisciplines = false, 
+  onToggleNodeSelection, 
+  onSelectionChange 
+}, ref) => {
+  const shellRef = useRef(null);
   const containerRef = useRef(null);
   const cyRef = useRef(null);
+  const ignoreTapCloseUntilRef = useRef(0);
+  const selectedNodeIdsRef = useRef(selectedNodeIds);
+  const onToggleNodeSelectionRef = useRef(onToggleNodeSelection);
+  const onSelectionChangeRef = useRef(onSelectionChange);
+  const [contextMenu, setContextMenu] = useState({ open: false, x: 0, y: 0 });
+
+  useEffect(() => {
+    selectedNodeIdsRef.current = selectedNodeIds;
+  }, [selectedNodeIds]);
+
+  useEffect(() => {
+    onToggleNodeSelectionRef.current = onToggleNodeSelection;
+  }, [onToggleNodeSelection]);
+
+  useEffect(() => {
+    onSelectionChangeRef.current = onSelectionChange;
+  }, [onSelectionChange]);
+
+  const closeContextMenu = () => {
+    setContextMenu((prev) => (prev.open ? { ...prev, open: false } : prev));
+  };
+
+  const openContextMenu = (clientX, clientY) => {
+    if (!selectedNodeIdsRef.current.length) {
+      closeContextMenu();
+      return;
+    }
+
+    // Задержка, чтобы клик по узлу не закрыл меню сразу после ПКМ
+    ignoreTapCloseUntilRef.current = Date.now() + 220;
+
+    const shell = shellRef.current;
+    if (!shell) return;
+
+    const rect = shell.getBoundingClientRect();
+    setContextMenu({
+      open: true,
+      x: clientX - rect.left,
+      y: clientY - rect.top
+    });
+  };
 
   useImperativeHandle(ref, () => ({
     exportPNG: () => {
@@ -33,7 +114,6 @@ const GraphField = forwardRef(({ data, onNodeSelect }, ref) => {
   useEffect(() => {
     if (!containerRef.current || !data) return;
 
-    // очистка предыдущего графа
     if (cyRef.current) {
       cyRef.current.destroy();
       cyRef.current = null;
@@ -51,7 +131,6 @@ const GraphField = forwardRef(({ data, onNodeSelect }, ref) => {
       successors.forEach(s => nodesSet.add(s));
     });
 
-    // узлы дисциплин
     const nodes = Array.from(nodesSet).map(name => ({
       data: {
         id: name,
@@ -61,7 +140,6 @@ const GraphField = forwardRef(({ data, onNodeSelect }, ref) => {
       }
     }));
 
-    // ребра 
     const edges = [];
     const edgesSet = new Set();
 
@@ -70,29 +148,22 @@ const GraphField = forwardRef(({ data, onNodeSelect }, ref) => {
       const predecessors = subjectData.предметы_до || [];
       const successors = subjectData.предметы_после || [];
 
-      // ребра от предшественников к текущему предмету
       predecessors.forEach(p => {
         const edgeKey = `${p}->${subject}`;
         if (!edgesSet.has(edgeKey)) {
-          edges.push({
-            data: { source: p, target: subject }
-          });
+          edges.push({ data: { source: p, target: subject } });
           edgesSet.add(edgeKey);
         }
       });
 
-      // ребра от текущего предмета к преемникам
       successors.forEach(s => {
         const edgeKey = `${subject}->${s}`;
         if (!edgesSet.has(edgeKey)) {
-          edges.push({
-            data: { source: subject, target: s }
-          });
+          edges.push({ data: { source: subject, target: s } });
           edgesSet.add(edgeKey);
         }
       });
 
-      // узлы тем и подтем
       const topics = Array.isArray(subjectData.темы) ? subjectData.темы : [];
       topics.forEach((topic) => {
         const topicName = topic?.name;
@@ -141,6 +212,8 @@ const GraphField = forwardRef(({ data, onNodeSelect }, ref) => {
       const cy = cytoscape({
         container: containerRef.current,
         elements: { nodes, edges },
+        boxSelectionEnabled: true,
+        selectionType: 'additive',
         style: [
           {
             selector: 'node',
@@ -195,6 +268,15 @@ const GraphField = forwardRef(({ data, onNodeSelect }, ref) => {
             }
           },
           {
+            selector: 'node.highlighted',
+            style: {
+              'border-color': '#FF9800',
+              'border-width': 5,
+              'overlay-opacity': 0,
+              'z-index': 999
+            }
+          },
+          {
             selector: 'edge',
             style: {
               'width': 2,
@@ -219,6 +301,54 @@ const GraphField = forwardRef(({ data, onNodeSelect }, ref) => {
           cyRef.current.fit();
         }
       }, 100);
+
+      cy.on('tap', 'node', (event) => {
+        if (Date.now() < ignoreTapCloseUntilRef.current) return;
+
+        const nativeEvent = event.originalEvent;
+        if (nativeEvent && nativeEvent.button !== 0) return;
+
+        closeContextMenu();
+        const tappedNode = event.target;
+        const nodeData = tappedNode.data();
+
+        if (onToggleNodeSelectionRef.current) {
+          onToggleNodeSelectionRef.current(nodeData.id);
+        }
+      });
+
+      cy.on('tap', (tapEvent) => {
+        if (Date.now() < ignoreTapCloseUntilRef.current) return;
+
+        const nativeEvent = tapEvent.originalEvent;
+        if (nativeEvent && nativeEvent.button !== 0) return;
+
+        closeContextMenu();
+      });
+
+      cy.on('cxttap', (event) => {
+        if (!selectedNodeIdsRef.current.length) {
+          closeContextMenu();
+          return;
+        }
+
+        const nativeEvent = event.originalEvent;
+        if (!nativeEvent) return;
+
+        nativeEvent.preventDefault();
+        openContextMenu(nativeEvent.clientX, nativeEvent.clientY);
+      });
+
+      const syncSelectedFromGraph = () => {
+        if (!onSelectionChangeRef.current) return;
+        const selectedIds = cy.nodes(':selected').map((node) => node.id());
+        onSelectionChangeRef.current(selectedIds);
+      };
+
+      cy.on('boxend', syncSelectedFromGraph);
+      cy.on('select unselect', 'node', syncSelectedFromGraph);
+
+      applyGraphVisibility(cy, selectedNodeIds, hiddenNodeIds);
     } catch (err) {
       console.error('Error creating cytoscape graph:', err);
     }
@@ -231,7 +361,124 @@ const GraphField = forwardRef(({ data, onNodeSelect }, ref) => {
     };
   }, [data]);
 
-  return <div ref={containerRef} className="graph-field" />;
+  useEffect(() => {
+    if (!cyRef.current) return;
+    applyGraphVisibility(cyRef.current, selectedNodeIds, hiddenNodeIds);
+  }, [selectedNodeIds, hiddenNodeIds]);
+
+  useEffect(() => {
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        closeContextMenu();
+      }
+    };
+
+    const handleGlobalPointerDown = (event) => {
+      const shell = shellRef.current;
+      if (!shell) return;
+
+      if (!shell.contains(event.target)) {
+        closeContextMenu();
+      }
+    };
+
+    window.addEventListener('keydown', handleEscape);
+    window.addEventListener('pointerdown', handleGlobalPointerDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleEscape);
+      window.removeEventListener('pointerdown', handleGlobalPointerDown);
+    };
+  }, []);
+
+  const handleShellContextMenu = (event) => {
+    event.preventDefault();
+    if (!selectedNodeIdsRef.current.length) {
+      closeContextMenu();
+      return;
+    }
+    openContextMenu(event.clientX, event.clientY);
+  };
+
+  const handleContextActionClick = (event) => {
+    event.stopPropagation();
+    if (!selectedNodeIds.length) return;
+    onHideSelected?.();
+    closeContextMenu();
+  };
+
+  const handleKeepOnlyClick = (event) => {
+    event.stopPropagation();
+    if (!selectedNodeIds.length) return;
+    onKeepOnlySelectedAndDescendants?.();
+    closeContextMenu();
+  };
+
+  const handleHideSubtopicsClick = (event) => {
+    event.stopPropagation();
+    if (!areAllSelectedDisciplines) return;
+    onHideSubtopicsForDisciplines?.();
+    closeContextMenu();
+  };
+
+  const handleHideTopicsAndSubtopicsClick = (event) => {
+    event.stopPropagation();
+    if (!areAllSelectedDisciplines) return;
+    onHideTopicsAndSubtopicsForDisciplines?.();
+    closeContextMenu();
+  };
+
+  const handleContextMenuClick = (event) => {
+    event.stopPropagation();
+  };
+
+  return (
+    <div ref={shellRef} className="graph-field-shell" onContextMenu={handleShellContextMenu}>
+      <div ref={containerRef} className="graph-field" />
+      {contextMenu.open && (
+        <div
+          className="graph-field__context-menu"
+          style={{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }}
+          onClick={handleContextMenuClick}
+        >
+          <button
+            type="button"
+            className="graph-field__context-action"
+            onClick={handleContextActionClick}
+            disabled={!selectedNodeIds.length}
+          >
+            {hideButtonText}
+          </button>
+          <button
+            type="button"
+            className="graph-field__context-action"
+            onClick={handleKeepOnlyClick}
+            disabled={!selectedNodeIds.length}
+          >
+            {keepOnlyButtonText}
+          </button>
+          {areAllSelectedDisciplines && (
+            <>
+              <button
+                type="button"
+                className="graph-field__context-action"
+                onClick={handleHideSubtopicsClick}
+              >
+                Скрыть все подтемы
+              </button>
+              <button
+                type="button"
+                className="graph-field__context-action"
+                onClick={handleHideTopicsAndSubtopicsClick}
+              >
+                Скрыть все темы и подтемы
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
 });
 
 export default GraphField;

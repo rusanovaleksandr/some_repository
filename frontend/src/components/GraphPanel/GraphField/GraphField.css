@@ -1,3 +1,9 @@
+.graph-field-shell {
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+
 .graph-field {
     width: 100%;
     height: 100%;
@@ -7,4 +13,39 @@
         linear-gradient(0deg, transparent 24%, rgba(200, 200, 200, 0.1) 25%, rgba(200, 200, 200, 0.1) 26%, transparent 27%, transparent 74%, rgba(200, 200, 200, 0.1) 75%, rgba(200, 200, 200, 0.1) 76%, transparent 77%, transparent),
         linear-gradient(90deg, transparent 24%, rgba(200, 200, 200, 0.1) 25%, rgba(200, 200, 200, 0.1) 26%, transparent 27%, transparent 74%, rgba(200, 200, 200, 0.1) 75%, rgba(200, 200, 200, 0.1) 76%, transparent 77%, transparent);
     background-size: 50px 50px;
+}
+
+.graph-field__context-menu {
+    position: absolute;
+    z-index: 20;
+    transform: translate(4px, 4px);
+    min-width: 190px;
+    background: #ffffff;
+    border: 1px solid #1d1d1d;
+    border-radius: 10px;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.22);
+    padding: 6px;
+}
+
+.graph-field__context-action {
+    width: 100%;
+    border: none;
+    border-radius: 7px;
+    text-align: left;
+    background: #ffffff;
+    color: #111111;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 10px;
+    cursor: pointer;
+}
+
+.graph-field__context-action:hover:not(:disabled) {
+    background: #111111;
+    color: #ffffff;
+}
+
+.graph-field__context-action:disabled {
+    color: #929292;
+    cursor: not-allowed;
 }

@@ -20,7 +20,6 @@ def is_russian_text(text: str) -> bool:
     if not text or not text.strip():
         return True
 
-    # Быстрая проверка: если есть кириллица и нет латиницы — скорее всего русский
     has_cyrillic = bool(re.search(r"[А-Яа-яЁё]", text))
     has_latin = bool(re.search(r"[A-Za-z]", text))
     if has_cyrillic and not has_latin:
@@ -47,8 +46,6 @@ def _translate_single_text_to_ru(text: str, stats: TranslationStats) -> str:
     if is_russian_text(text):
         return text
 
-    # Для коротких латинских строк langdetect иногда ошибается, поэтому используем
-    # автоопределение языка в переводчике и только проверяем, что не ru.
     try:
         detected = detect(text)
         if detected == "ru":
