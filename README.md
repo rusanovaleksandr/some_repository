@@ -69,3 +69,6 @@ REACT_APP_API_URL_GET_PROGRAMMS=localhost:8000
 - `backend/Dockerfile` — контейнер FastAPI
 - `frontend/Dockerfile` + `frontend/nginx.conf` — production-сборка React и раздача через Nginx
 - `.dockerignore` — ускорение сборки и уменьшение контекста
+
+
+"незначительно изменение для проверки"
