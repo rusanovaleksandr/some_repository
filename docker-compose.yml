@@ -49,19 +49,4 @@ services:
 
   frontend:
     build:
-      context: .
-      dockerfile: frontend/Dockerfile
-      args:
-        REACT_APP_API_URL: ${REACT_APP_API_URL:-localhost:8000}
-        REACT_APP_API_URL_ADD_PROGRAM: ${REACT_APP_API_URL_ADD_PROGRAM:-localhost:8000}
-        REACT_APP_API_URL_GET_PROGRAMMS: ${REACT_APP_API_URL_GET_PROGRAMMS:-localhost:8000}
-    container_name: eduprogram-frontend
-    restart: unless-stopped
-    depends_on:
-      - backend
-    ports:
-      - "3000:80"
-
-volumes:
-  db_data:
-  backend_storage:
+      
