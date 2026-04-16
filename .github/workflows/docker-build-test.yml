@@ -1,0 +1,24 @@
+name: PR Build Check
+
+on:
+  pull_request:
+    branches:
+      - main
+      - dev
+
+jobs:
+  docker-compose-build:
+    name: Docker Compose Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Show Docker versions
+        run: |
+          docker --version
+          docker compose version
+
+      - name: Build project with docker compose
+        run: docker compose -f docker-compose.yml build
